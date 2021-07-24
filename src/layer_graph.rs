@@ -1,10 +1,8 @@
-use std::any::{self, Any};
+use std::any::{Any};
 
-use anyhow::{Context, Result};
-use petgraph::visit::IntoNeighborsDirected;
+use anyhow::{Result};
 use petgraph::{graph::NodeIndex, Direction, Graph};
 
-use crate::entity::{Point};
 use crate::layer::InteractiveLayer;
 
 pub struct InteractiveLayerGraph {
@@ -44,7 +42,7 @@ impl InteractiveLayerGraph {
         self.add_layer_with_children(layer, parent_nodes, vec![])
     }
 
-    pub fn compute_layer(&mut self, layer: NodeIndex) {
+    pub fn compute_layer(&mut self, layer: NodeIndex) -> Result<()> {
         let input: Vec<&Option<Box<dyn Any>>> = self
             .layers
             .neighbors_directed(layer, Direction::Incoming)
@@ -52,7 +50,8 @@ impl InteractiveLayerGraph {
             .collect();
 
         let mut output = None;
-        self.layers[layer].compute(&input, &mut output);
+        self.layers[layer].compute(&input, &mut output)?;
         self.layer_output[layer.index()] = output;
+        Ok(())
     }
 }

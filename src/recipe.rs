@@ -1,10 +1,3 @@
-use std::any::{self, Any};
-
-use anyhow::{Context, Result};
-
-use crate::entity::{Line};
-use crate::layer::Layer;
-
 pub struct CannyEdge {}
 
 // impl Layer for CannyEdge {

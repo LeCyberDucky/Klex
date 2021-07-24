@@ -23,7 +23,7 @@ pub mod primitive {
 
     use image::{GrayImage, RgbaImage};
 
-    use crate::entity::{self, BinaryImage, Point};
+    use crate::entity::{self, BinaryImage};
 
     pub struct Convert<A, B> {
         operation: fn(&A) -> Result<B>,
