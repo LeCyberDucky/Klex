@@ -55,3 +55,9 @@ impl InteractiveLayerGraph {
         Ok(())
     }
 }
+
+impl Default for InteractiveLayerGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}

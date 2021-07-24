@@ -41,6 +41,12 @@ pub mod primitive {
         }
     }
 
+impl Default for Convert<RgbaImage, GrayImage> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
     impl Convert<BinaryImage, GrayImage> {
         pub fn new() -> Self {
             Self {
@@ -53,6 +59,12 @@ pub mod primitive {
             GrayImage::from_vec(input.width(), input.height(), data).context("Data cannot be converted to GrayImage")
         }
     }
+
+impl Default for Convert<BinaryImage, GrayImage> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
     
     impl<A: 'static, B: 'static> Layer for Convert<A, B> {
         fn compute(
@@ -100,7 +112,7 @@ pub mod primitive {
             _input: &[&Option<Box<dyn Any>>], // This layer does not depend on other layers
             output: &mut Option<Box<dyn Any>>,
         ) -> Result<()> {
-            *output = Some(Box::new((self.operation)(&self)?));
+            *output = Some(Box::new((self.operation)(self)?));
             Ok(())
         }
     }
@@ -139,7 +151,7 @@ impl Threshold<GrayImage, entity::BinaryImage, u8> {
                 "Casting failed. Expected input of type {:#?}",
                 any::type_name::<A>()
             ))?;
-            *output = Some(Box::new((self.operation)(&self, input)));
+            *output = Some(Box::new((self.operation)(self, input)));
             Ok(())
         }
     }
