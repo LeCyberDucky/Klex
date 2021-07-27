@@ -12,3 +12,5 @@ image = "0.23.14"
 petgraph = "0.6.0"
 iced = { version = "0.3.0", features = ["canvas"] }
 crossbeam-channel = "0.5.1"
+iced_native = "0.4.0"
+iced_wgpu = "0.4.0"

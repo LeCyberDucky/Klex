@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::{Instant};
 
-use iced::{Application, Command, executor, Column};
+use iced::{Application, Command, executor};
 
 use crate::backend;
 use crate::util::{self, Message};
@@ -107,7 +107,7 @@ impl Application for UI {
     fn update(
         &mut self,
         message: Self::Message,
-        clipboard: &mut iced::Clipboard,
+        _clipboard: &mut iced::Clipboard,
     ) -> iced::Command<Self::Message> {
         match message {
             Self::Message::Tick(_) => {
@@ -134,7 +134,5 @@ impl Application for UI {
     fn view(&mut self) -> iced::Element<'_, Self::Message> {
         todo!()
     }
-
-    
 }
 

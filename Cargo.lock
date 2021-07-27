@@ -1397,6 +1397,8 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "iced",
+ "iced_native",
+ "iced_wgpu",
  "image",
  "petgraph 0.6.0",
 ]
