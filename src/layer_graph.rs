@@ -1,22 +1,37 @@
 use std::any::{Any};
+use std::thread;
 
 use anyhow::{Result};
 use petgraph::{graph::NodeIndex, Direction, Graph};
 
 use crate::layer::InteractiveLayer;
+use crate::util;
+
+pub struct Task<'a> {
+    input: &'a Option<Box<dyn Any>>,
+    operation: &'a dyn Fn() -> (),
+    // operation: &fn compute(
+    //     &mut self,
+    //     input: &[&Option<Box<dyn Any>>],
+    //     output: &mut Option<Box<dyn Any>>,
+    // ) -> Result<()>;
+}
 
 pub struct InteractiveLayerGraph {
     pub layers: Graph<Box<dyn InteractiveLayer>, ()>, // Store layers together with their corresponding output
     pub layer_output: Vec<Option<Box<dyn Any>>>,
     selected_layer: NodeIndex,
+    worker: util::ThreadChannel<Task, ()>,
 }
 
 impl InteractiveLayerGraph {
     pub fn new() -> Self {
+        let (graph, worker) = util::ThreadChannel::new_pair();
         Self {
             layers: Graph::new(),
             layer_output: Vec::new(),
             selected_layer: NodeIndex::new(0),
+            worker,
         }
     }
 
