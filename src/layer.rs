@@ -4,11 +4,20 @@ use anyhow::{Context, Result};
 use iced_native::Widget;
 
 pub trait Layer {
+    // fn compute(
+    //     &self,
+    //     input: &[&Option<Box<dyn Any>>],
+    //     output: &mut Option<Box<dyn Any>>,
+    // ) -> Result<()>; 
+
     fn compute(
-        &mut self,
+        &self,
         input: &[&Option<Box<dyn Any>>],
-        output: &mut Option<Box<dyn Any>>,
-    ) -> Result<()>; 
+    ) -> Result<(Option<Box<dyn Any>>, Option<Box<dyn Any>>)>; 
+
+    fn update(&mut self, output: Option<Box<dyn Any>>, state_updates: Option<Box<dyn Any>>) -> Result<()>;
+
+    fn output(&self) -> &Option<Box<dyn Any>>;
 }
 
 pub trait InteractiveLayer<Message, Renderer: iced_native::Renderer>: Layer + Widget<Message, Renderer> {
@@ -28,12 +37,14 @@ pub mod primitive {
 
     pub struct Convert<A, B> {
         operation: fn(&A) -> Result<B>,
+        output: Option<B>
     }
 
     impl Convert<RgbaImage, GrayImage> {
         pub fn new() -> Self {
             Self {
                 operation: Self::compute,
+                output: None
             }
         }
 
@@ -52,6 +63,7 @@ pub mod primitive {
         pub fn new() -> Self {
             Self {
                 operation: Self::compute,
+                output: None
             }
         }
 
@@ -69,20 +81,66 @@ pub mod primitive {
     
     impl<A: 'static, B: 'static> Layer for Convert<A, B> {
         fn compute(
-            &mut self,
-            input: &[&Option<Box<dyn Any>>],
-            output: &mut Option<Box<dyn Any>>,
-        ) -> Result<()> {
-            let input = input[0]; // Convert only expects input from a single source layer
-            let input = input.as_ref().context("Empty input")?;
-            let input = input.downcast_ref::<A>().context(format!(
-                "Casting failed. Expected input of type {:#?}",
-                any::type_name::<A>()
-            ))?;
-            *output = Some(Box::new((self.operation)(input)?));
-            Ok(())
-        }
+        &self,
+        input: &[&Option<Box<dyn Any>>],
+    ) -> Result<(Option<Box<dyn Any>>, Option<Box<dyn Any>>)> {
+        let input = input[0]; // Convert only expects input from a single source layer
+        let input = input.as_ref().context("Empty input")?;
+        let input = input.downcast_ref::<A>().context(format!(
+            "Casting failed. Expected input of type {:#?}",
+            any::type_name::<A>()
+        ))?;
+
+        let output = Some(Box::new((self.operation)(input)?) as Box::<dyn Any>);
+        let state_updates = None;
+        Ok((output, state_updates))
     }
+
+    fn update(&mut self, output: Option<Box<dyn Any>>, state_updates: Option<Box<dyn Any>>) -> Result<()> {
+        self.output = match output {
+            Some(output) => match output.downcast::<B>() {
+                Ok(output) => Some(*output),
+                Err(_) => None,
+            }
+            None => None,
+        };
+
+        match state_updates {
+            Some(_) => todo!(),
+            None => (),
+        }
+
+        Ok(())
+    }
+
+    fn output(&self) -> &Option<Box<dyn Any>> {
+        // match self.output {
+        //     Some(output) => &Some(Box::new(output) as Box::<dyn Any>),
+        //     None => &None,
+        // }
+
+        
+
+    }
+
+    
+        // fn compute(
+        //     &mut self,
+        //     input: &[&Option<Box<dyn Any>>],
+        //     output: &mut Option<Box<dyn Any>>,
+        // ) -> Result<()> {
+        //     let input = input[0]; // Convert only expects input from a single source layer
+        //     let input = input.as_ref().context("Empty input")?;
+        //     let input = input.downcast_ref::<A>().context(format!(
+        //         "Casting failed. Expected input of type {:#?}",
+        //         any::type_name::<A>()
+        //     ))?;
+        //     *output = Some(Box::new((self.operation)(input)?));
+        //     Ok(())
+        // }
+        
+    }
+    
 
     // https://github.com/hecrj/iced/blob/master/examples/bezier_tool/src/main.rs
     // https://docs.rs/iced_native/0.4.0/iced_native/widget/trait.Widget.html
@@ -128,6 +186,7 @@ pub mod primitive {
     pub struct InputFile<A> {
         file_path: std::path::PathBuf,
         operation: fn(&Self) -> Result<A>,
+        output: Option<A>
     }
 
     impl InputFile<RgbaImage> {
@@ -135,6 +194,7 @@ pub mod primitive {
             Self {
                 file_path,
                 operation: Self::compute,
+                output: None
             }
         }
     
@@ -145,13 +205,48 @@ pub mod primitive {
 
     impl<A: 'static> Layer for InputFile<A> {
         fn compute(
-            &mut self,
-            _input: &[&Option<Box<dyn Any>>], // This layer does not depend on other layers
-            output: &mut Option<Box<dyn Any>>,
-        ) -> Result<()> {
-            *output = Some(Box::new((self.operation)(self)?));
-            Ok(())
+        &self,
+        _input: &[&Option<Box<dyn Any>>], // This layer does not depend on other layers
+    ) -> Result<(Option<Box<dyn Any>>, Option<Box<dyn Any>>)> {
+        let output = Some(Box::new((self.operation)(self)?) as Box::<dyn Any>);
+        let state_updates = None;
+        Ok((output, state_updates))
+    }
+
+    fn update(&mut self, output: Option<Box<dyn Any>>, state_updates: Option<Box<dyn Any>>) -> Result<()> {
+        self.output = match output {
+            Some(output) => match output.downcast::<A>() {
+                Ok(output) => Some(*output),
+                Err(_) => None,
+            }
+            None => None,
+        };
+
+        match state_updates {
+            Some(_) => todo!(),
+            None => (),
         }
+
+        Ok(())
+    }
+
+    fn output(&self) -> &Option<Box<dyn Any>> {
+        match self.output {
+            Some(output) => &Some(Box::new(output) as Box::<dyn Any>),
+            None => &None,
+        }
+    }
+
+    
+        // fn compute(
+        //     &mut self,
+        //     _input: &[&Option<Box<dyn Any>>], // This layer does not depend on other layers
+        //     output: &mut Option<Box<dyn Any>>,
+        // ) -> Result<()> {
+        //     *output = Some(Box::new((self.operation)(self)?));
+        //     Ok(())
+        // }
+        
     }
 
     impl<A: 'static, Message, Renderer: iced_native::Renderer> Widget<Message, Renderer> for InputFile<A> {
@@ -193,6 +288,7 @@ pub mod primitive {
         threshold: T,
         ordering: std::cmp::Ordering,
         operation: fn(&Self, input: &A) -> B,
+        output: Option<B>,
     }
 
     impl Threshold<GrayImage, entity::BinaryImage, u8> {
@@ -201,6 +297,7 @@ pub mod primitive {
                 threshold,
                 ordering,
                 operation: Self::compute,
+                output: None,
             }
 
         }
@@ -214,16 +311,55 @@ pub mod primitive {
     
 
     impl<A: 'static, B: 'static, T> Layer for Threshold<A, B, T> {
-        fn compute(&mut self, input: &[&Option<Box<dyn Any>>], output: &mut Option<Box<dyn Any>>) -> Result<()> {
+        // fn compute(&mut self, input: &[&Option<Box<dyn Any>>], output: &mut Option<Box<dyn Any>>) -> Result<()> {
+        //     let input = input[0]; // Threshold only expects input from a single source layer
+        //     let input = input.as_ref().context("Empty input")?;
+        //     let input = input.downcast_ref::<A>().context(format!(
+        //         "Casting failed. Expected input of type {:#?}",
+        //         any::type_name::<A>()
+        //     ))?;
+        //     *output = Some(Box::new((self.operation)(self, input)));
+        //     Ok(())
+        // }
+
+        fn compute(&self, input: &[&Option<Box<dyn Any>>]) -> Result<(Option<Box<dyn Any>>, Option<Box<dyn Any>>)> {
             let input = input[0]; // Threshold only expects input from a single source layer
             let input = input.as_ref().context("Empty input")?;
             let input = input.downcast_ref::<A>().context(format!(
                 "Casting failed. Expected input of type {:#?}",
                 any::type_name::<A>()
             ))?;
-            *output = Some(Box::new((self.operation)(self, input)));
+    
+            let output = Some(Box::new((self.operation)(self, input)) as Box::<dyn Any>);
+            let state_updates = None;
+            Ok((output, state_updates))
+        }
+
+        fn update(&mut self, output: Option<Box<dyn Any>>, state_updates: Option<Box<dyn Any>>) -> Result<()> {
+            self.output = match output {
+                Some(output) => match output.downcast::<B>() {
+                    Ok(output) => Some(*output),
+                    Err(_) => None,
+                }
+                None => None,
+            };
+    
+            match state_updates {
+                Some(_) => todo!(),
+                None => (),
+            }
+    
             Ok(())
         }
+
+        fn output(&self) -> &Option<Box<dyn Any>> {
+            match self.output {
+                Some(output) => &Some(Box::new(output) as Box::<dyn Any>),
+                None => &None,
+            }
+        }
+
+        
     }
 
     impl<A: 'static, B: 'static, T, Message, Renderer: iced_native::Renderer> Widget<Message, Renderer> for Threshold<A, B, T> {

@@ -10,7 +10,7 @@ use crate::ui;
 
 pub struct InteractiveLayerGraph {
     pub layers: Graph<Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Renderer>>, ()>, 
-    pub layer_output: Vec<Option<Box<dyn Any>>>,
+    // pub layer_output: Vec<Option<Box<dyn Any>>>,
     selected_layer: NodeIndex,
 }
 
@@ -18,7 +18,7 @@ impl InteractiveLayerGraph {
     pub fn new() -> Self {
         Self {
             layers: Graph::new(),
-            layer_output: Vec::new(),
+            // layer_output: Vec::new(),
             selected_layer: NodeIndex::new(0),
         }
     }
@@ -30,7 +30,7 @@ impl InteractiveLayerGraph {
         child_nodes: Vec<NodeIndex>,
     ) {
         let new_node = self.layers.add_node(layer);
-        self.layer_output.push(None);
+        // self.layer_output.push(None);
 
         for parent in parent_nodes {
             self.layers.add_edge(parent, new_node, ());
@@ -46,15 +46,24 @@ impl InteractiveLayerGraph {
     }
 
     pub fn compute_layer(&mut self, layer: NodeIndex) -> Result<()> {
-        let input: Vec<&Option<Box<dyn Any>>> = self
-            .layers
-            .neighbors_directed(layer, Direction::Incoming)
-            .map(|neighbor| &self.layer_output[neighbor.index()])
-            .collect();
+        // let input: Vec<&Option<Box<dyn Any>>> = self
+        //     .layers
+        //     .neighbors_directed(layer, Direction::Incoming)
+        //     .map(|neighbor| &self.layer_output[neighbor.index()])
+        //     .collect();
 
-        let mut output = None;
-        self.layers[layer].compute(&input, &mut output)?;
-        self.layer_output[layer.index()] = output;
+        // let mut output = None;
+        // self.layers[layer].compute(&input, &mut output)?;
+        // self.layer_output[layer.index()] = output;
+        // Ok(())
+
+        let input: Vec<&Option<Box<dyn Any>>> = self.layers
+        .neighbors_directed(layer, Direction::Incoming)
+        .map(|neighbor| self.layers[neighbor].output())
+        .collect();
+
+        let (output, state_changes) = self.layers[layer].compute(&input)?;
+        self.layers[layer].update(output, state_changes);
         Ok(())
     }
 }
