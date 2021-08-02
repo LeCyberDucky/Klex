@@ -1,34 +1,34 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use iced::{Application, Settings};
 use image::{self, GrayImage, RgbaImage};
+use petgraph::graph::NodeIndex;
 
-use klex::{entity::{BinaryImage}, layer::{primitive::{Convert, InputFile, Threshold}}};
+use klex::{element::{BinImage}, layer::{primitive::{Convert, InputFile, Threshold}}};
 use klex::layer_graph::InteractiveLayerGraph;
 
 fn main() -> Result<()> {
-    println!("Oy!");
+    let mut layer_graph = InteractiveLayerGraph::new();
+    let layer = Box::new(InputFile::<RgbaImage>::new("Tulips.jpg".into()));
+    layer_graph.add_layer(layer, vec![]);
+    let layer = Box::new(Convert::<RgbaImage, GrayImage>::new());
+    layer_graph.add_layer(layer, vec![0.into()]);
+    let layer = Box::new(Threshold::<GrayImage, BinImage, u8>::new(100, std::cmp::Ordering::Greater));
+    layer_graph.add_layer(layer, vec![1.into()]);
+    let layer = Box::new(Convert::<BinImage, GrayImage>::new());
+    layer_graph.add_layer(layer, vec![2.into()]);
+    layer_graph.compute_layer(0.into())?;
+    layer_graph.compute_layer(1.into())?;
+    layer_graph.compute_layer(2.into())?;
+    layer_graph.compute_layer(3.into())?;
+
+    // println!("The final layer is some: {}", layer_graph.layers[NodeIndex::new(3)].ou.is_some());
+
+    if let Some(output) = layer_graph.layers[NodeIndex::new(3)].output() {
+        let image = output.downcast_ref::<GrayImage>().context("Can't cast to image :|")?;
+        image.save("GrayTulips.jpg")?;
+    }
+
     klex::ui::UI::run(Settings::default());
-    // let mut layers = InteractiveLayerGraph::new();
-    // let layer = Box::new(InputFile::<RgbaImage>::new("Tulips.jpg".into()));
-    // layers.add_layer(layer, vec![]);
-    // let layer = Box::new(Convert::<RgbaImage, GrayImage>::new());
-    // layers.add_layer(layer, vec![0.into()]);
-    // let layer = Box::new(Threshold::<GrayImage, BinaryImage, u8>::new(100, std::cmp::Ordering::Greater));
-    // layers.add_layer(layer, vec![1.into()]);
-    // let layer = Box::new(Convert::<BinaryImage, GrayImage>::new());
-    // layers.add_layer(layer, vec![2.into()]);
-    // layers.compute_layer(0.into())?;
-    // layers.compute_layer(1.into())?;
-    // layers.compute_layer(2.into())?;
-    // layers.compute_layer(3.into())?;
 
-    // println!("The final layer is some: {}", layers.layer_output[3].is_some());
-
-    // if let Some(output) = &layers.layer_output[3] {
-    //     let output = output.downcast_ref::<GrayImage>();
-    //     if let Some(image) = output {
-    //         image.save("GrayTulips.jpg")?;
-    //     }
-    // }
     Ok(())
 }
