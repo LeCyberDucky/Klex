@@ -7,7 +7,7 @@ pub struct Point {}
 pub struct Image<PixelKind> {
     data: ndarray::Array2<PixelKind>,
     width: usize,
-    height: usize
+    height: usize,
 }
 
 type BinaryImage = Image<bool>;
@@ -32,11 +32,17 @@ mod pixel {
 pub struct BinImage {
     width: u32,
     height: u32,
-    data: Vec<bool>
+    data: Vec<bool>,
 }
 
 impl BinImage {
-    pub fn new(width: u32, height: u32, data: Vec<bool>) -> Self { Self { width, height, data } }
+    pub fn new(width: u32, height: u32, data: Vec<bool>) -> Self {
+        Self {
+            width,
+            height,
+            data,
+        }
+    }
 
     pub fn width(&self) -> u32 {
         self.width

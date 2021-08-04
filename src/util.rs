@@ -38,8 +38,7 @@ impl<TX, RX> ThreadChannel<TX, RX> {
 }
 
 #[derive(Clone)]
-pub enum Message<D, E>
-{
+pub enum Message<D, E> {
     Data(D),
     Event(E),
 }

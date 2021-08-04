@@ -1,18 +1,14 @@
 use std::thread;
-use std::time::{Instant};
+use std::time::Instant;
 
-use iced::{Application, Command, executor};
+use iced::{executor, Application, Command};
 
 use crate::backend;
 use crate::util::{self, Message};
 
-pub enum Data {
-    
-}
+pub enum Data {}
 
-pub enum Event {
-
-}
+pub enum Event {}
 
 // pub mod data {
 //     use super::*;
@@ -53,21 +49,24 @@ pub enum Event {
 
 #[derive(Debug, Clone)]
 pub enum InternalMessage {
-    Tick(Instant)
+    Tick(Instant),
 }
 
 pub struct UI {
     backend: util::ThreadChannel<Message<backend::Data, backend::Event>, Message<Data, Event>>,
-    settings: Settings
-    
+    settings: Settings,
 }
 
 pub struct Settings {
-    target_refresh_rate: u64
+    target_refresh_rate: u64,
 }
 
 impl Settings {
-    fn new(target_refresh_rate: u64) -> Self { Self { target_refresh_rate } }
+    fn new(target_refresh_rate: u64) -> Self {
+        Self {
+            target_refresh_rate,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -85,12 +84,12 @@ impl Application for UI {
     fn new(flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
         let (ui, backend) = util::ThreadChannel::new_pair();
 
-        thread::Builder::new().name("Klex - Backend".into()).spawn(move || {
-            let backend = backend::Backend::new(
-                ui,
-            );
-            backend.run();
-        });
+        thread::Builder::new()
+            .name("Klex - Backend".into())
+            .spawn(move || {
+                let backend = backend::Backend::new(ui);
+                backend.run();
+            });
 
         let ui = UI {
             backend,
@@ -114,16 +113,8 @@ impl Application for UI {
                 let backend_updates = self.backend.receive();
                 for update in backend_updates {
                     match update {
-                        Message::Data(data) => {
-                            match data {
-
-                            }
-                        },
-                        Message::Event(event) => {
-                            match event {
-
-                            }
-                        },
+                        Message::Data(data) => match data {},
+                        Message::Event(event) => match event {},
                     }
                 }
             }
@@ -135,4 +126,3 @@ impl Application for UI {
         todo!()
     }
 }
-

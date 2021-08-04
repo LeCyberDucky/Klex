@@ -1398,6 +1398,7 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "iced",
+ "iced_graphics",
  "iced_native",
  "iced_wgpu",
  "image",
