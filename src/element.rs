@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ndarray;
 
 pub struct Line {}
@@ -15,12 +15,14 @@ pub struct Image<PixelKind> {
 }
 
 impl<PixelKind> Image<PixelKind> {
-    pub fn new(data: ndarray::Array2<PixelKind>, width: usize, height: usize) -> Self {
+    pub fn new(data: ndarray::Array2<PixelKind>, width: usize, height: usize) -> Result<Self> {
+        let data_shape = (data.len_of(ndarray::Axis(0)), data.len_of(ndarray::Axis(1)));
+        (data_shape == (height, width)).then_some(
         Self {
             data,
             width,
             height,
-        }
+        }).context(format!("Unable to create image. Data has shape ({}, {}). Expected shape ({}, {})", data_shape.0, data_shape.1, height, width))
     }
 
     // pub fn from_shape_vec(data: Vec<PixelKind>, width: usize, height: usize) -> Result<Self> {
@@ -48,6 +50,8 @@ impl<T> Image<pixel::RGBA<T>> {
     }
 }
 
+pub struct BinaryAlphaImage(Image<(bool, u8)>);
+
 pub struct BinaryImage(Image<bool>);
 impl Deref for BinaryImage {
     type Target = Image<bool>;
@@ -63,8 +67,8 @@ impl DerefMut for BinaryImage {
 }
 
 impl BinaryImage {
-    pub fn new(data: ndarray::Array2<bool>, width: usize, height: usize) -> Self {
-        Self(Image::new(data, width, height))
+    pub fn new(data: ndarray::Array2<bool>, width: usize, height: usize) -> Result<Self> {
+        Ok(Self(Image::new(data, width, height)?))
     }
 }
 
@@ -82,8 +86,8 @@ impl DerefMut for RgbaImage {
     }
 }
 impl RgbaImage {
-    pub fn new(data: ndarray::Array2<pixel::RGBA<u8>>, width: usize, height: usize) -> Self {
-        Self(Image::new(data, width, height))
+    pub fn new(data: ndarray::Array2<pixel::RGBA<u8>>, width: usize, height: usize) -> Result<Self> {
+        Ok(Self(Image::new(data, width, height)?))
     }
 
     pub fn open<P>(file_path: P) -> Result<Self>
@@ -106,7 +110,7 @@ impl RgbaImage {
             data,
             image.width() as usize,
             image.height() as usize,
-        ))
+        )?)
     }
 
     pub fn handle(&self) -> iced_native::widget::image::Handle {
@@ -138,10 +142,10 @@ impl DerefMut for RgbImage {
     }
 }
 
-pub struct GrayAlphaImage(Image<ndarray::Array1<u8>>); // Newtype pattern, to be able to distinguish
+pub struct GrayAlphaImage(Image<(u8, u8)>); // Newtype pattern, to be able to distinguish
                                                        // between different types of images that have the same underlying representation
 impl Deref for GrayAlphaImage {
-    type Target = Image<ndarray::Array1<u8>>;
+    type Target = Image<(u8, u8)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -154,8 +158,8 @@ impl DerefMut for GrayAlphaImage {
 }
 
 impl GrayAlphaImage {
-    pub fn new(data: ndarray::Array2<ndarray::Array1<u8>>, width: usize, height: usize) -> Self {
-        Self(Image::new(data, width, height))
+    pub fn new(data: ndarray::Array2<(u8, u8)>, width: usize, height: usize) -> Result<Self> {
+        Ok(Self(Image::new(data, width, height)?))
     }
 }
 
@@ -174,8 +178,8 @@ impl DerefMut for GrayImage {
 }
 
 impl GrayImage {
-    pub fn new(data: ndarray::Array2<u8>, width: usize, height: usize) -> Self {
-        Self(Image::new(data, width, height))
+    pub fn new(data: ndarray::Array2<u8>, width: usize, height: usize) -> Result<Self> {
+        Ok(Self(Image::new(data, width, height)?))
     }
 
     // pub fn from_shape_vec(data: Vec<u8>, width: usize, height: usize) -> Result<Self> {

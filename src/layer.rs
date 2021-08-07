@@ -25,7 +25,7 @@ pub trait InteractiveLayer<Message, RenderBackend: Backend>:
 }
 
 pub mod primitive {
-    use super::interactive::InterLayer;
+    use super::interactive::InteractionLayer;
     use super::*;
 
     use ndarray::array;
@@ -35,68 +35,6 @@ pub mod primitive {
     pub struct Convert<A, B> {
         operation: fn(&A) -> Result<B>,
         output: Option<B>,
-    }
-
-    impl Convert<RgbaImage, GrayAlphaImage> {
-        pub fn new() -> Self {
-            Self {
-                operation: Self::compute,
-                output: None,
-            }
-        }
-
-        pub fn compute(input: &RgbaImage) -> Result<GrayAlphaImage> {
-            // Colourimetric conversion to grayscale - Linear luminance
-            // https://en.wikipedia.org/wiki/Grayscale#Converting_colour_to_greyscale
-
-            let data = input.data().map(|pixel| {
-                let normed_colors = pixel.data().map(|&c| c as f64 / 255.0);
-                let linear_colors = normed_colors.map(|&c| {
-                    if c <= 0.04045 {
-                        c / 12.92
-                    } else {
-                        ((c + 0.55) / 1.055).powf(2.4)
-                    }
-                });
-
-                let linear_luminance = 0.2126 * linear_colors[0]
-                    + 0.7152 * linear_colors[1]
-                    + 0.0722 * linear_colors[2];
-                let linear_luminance = (255.0 * linear_luminance).round() as u8;
-
-                array![linear_luminance, pixel.data()[3]]
-            });
-
-            Ok(GrayAlphaImage::new(data, input.width(), input.height()))
-        }
-    }
-
-    impl Default for Convert<RgbaImage, GrayAlphaImage> {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-
-    impl Convert<BinaryImage, GrayImage> {
-        pub fn new() -> Self {
-            Self {
-                operation: Self::compute,
-                output: None,
-            }
-        }
-
-        pub fn compute(input: &BinaryImage) -> Result<GrayImage> {
-            let data = input
-                .data()
-                .map(|&pixel| if pixel { u8::MAX } else { u8::MIN });
-            Ok(GrayImage::new(data, input.width(), input.height()))
-        }
-    }
-
-    impl Default for Convert<BinaryImage, GrayImage> {
-        fn default() -> Self {
-            Self::new()
-        }
     }
 
     impl<A: 'static, B: 'static> Layer for Convert<A, B> {
@@ -144,6 +82,83 @@ pub mod primitive {
         }
     }
 
+    impl Convert<RgbaImage, GrayAlphaImage> {
+        pub fn new() -> Self {
+            Self {
+                operation: Self::compute,
+                output: None,
+            }
+        }
+
+        pub fn compute(input: &RgbaImage) -> Result<GrayAlphaImage> {
+            // Colourimetric conversion to grayscale - Linear luminance
+            // https://en.wikipedia.org/wiki/Grayscale#Converting_colour_to_greyscale
+
+            let data = input.data().map(|pixel| {
+                let normed_colors = pixel.data().map(|&c| c as f64 / 255.0);
+                let linear_colors = normed_colors.map(|&c| {
+                    if c <= 0.04045 {
+                        c / 12.92
+                    } else {
+                        ((c + 0.55) / 1.055).powf(2.4)
+                    }
+                });
+
+                let linear_luminance = 0.2126 * linear_colors[0]
+                    + 0.7152 * linear_colors[1]
+                    + 0.0722 * linear_colors[2];
+                let linear_luminance = (255.0 * linear_luminance).round() as u8;
+
+                (linear_luminance, pixel.data()[3])
+            });
+
+            GrayAlphaImage::new(data, input.width(), input.height())
+        }
+    }
+
+    impl Default for Convert<RgbaImage, GrayAlphaImage> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Convert<GrayAlphaImage, RgbaImage> {
+        pub fn new() -> Self {
+            Self {
+                operation: Self::compute,
+                output: None,
+            }
+        }
+
+        pub fn compute(input: &GrayAlphaImage) -> Result<RgbaImage> {
+            todo!() // This could be the inverse of converting RGBA to Gray, but should it? 
+        }
+    }
+
+    // impl Convert<BinaryImage, GrayImage> {
+    //     pub fn new() -> Self {
+    //         Self {
+    //             operation: Self::compute,
+    //             output: None,
+    //         }
+    //     }
+
+    //     pub fn compute(input: &BinaryImage) -> Result<GrayImage> {
+    //         let data = input
+    //             .data()
+    //             .map(|&pixel| if pixel { u8::MAX } else { u8::MIN });
+    //         GrayImage::new(data, input.width(), input.height())
+    //     }
+    // }
+
+    // impl Default for Convert<BinaryImage, GrayImage> {
+    //     fn default() -> Self {
+    //         Self::new()
+    //     }
+    // }
+
+
+
     // https://github.com/hecrj/iced/blob/master/examples/bezier_tool/src/main.rs
     // https://docs.rs/iced_native/0.4.0/iced_native/widget/trait.Widget.html
 
@@ -169,8 +184,8 @@ pub mod primitive {
             }
         }
 
-        pub fn new_interactive(file_path: std::path::PathBuf) -> InterLayer<Self, RgbaImage> {
-            InterLayer::new(Self::new(file_path))
+        pub fn new_interactive(file_path: std::path::PathBuf) -> InteractionLayer<Self, RgbaImage> {
+            InteractionLayer::new(Self::new(file_path))
         }
 
         pub fn compute(&self) -> Result<RgbaImage> {
@@ -235,7 +250,7 @@ pub mod primitive {
     pub struct Threshold<A, B, T> {
         threshold: T,
         ordering: std::cmp::Ordering,
-        operation: fn(&Self, input: &A) -> B,
+        operation: fn(&Self, input: &A) -> Result<B>,
         output: Option<B>,
     }
 
@@ -249,7 +264,7 @@ pub mod primitive {
             }
         }
 
-        pub fn compute(&self, input: &GrayImage) -> BinaryImage {
+        pub fn compute(&self, input: &GrayImage) -> Result<BinaryImage> {
             let data = input
                 .data()
                 .map(|pixel| pixel.cmp(&self.threshold) == self.ordering);
@@ -269,7 +284,7 @@ pub mod primitive {
                 any::type_name::<A>()
             ))?;
 
-            let output = Some(Box::new((self.operation)(self, input)) as Box<dyn Any>);
+            let output = Some(Box::new((self.operation)(self, input)?) as Box<dyn Any>);
             let state_updates = None;
             Ok((output, state_updates))
         }
@@ -319,7 +334,7 @@ pub mod interactive {
 
     struct Cache {}
 
-    pub struct InterLayer<A: Layer, T> {
+    pub struct InteractionLayer<A: Layer, T> {
         layer: A,
         // cache: Option<Geometry> // https://docs.rs/iced/0.3.0/iced/widget/canvas/struct.Cache.html https://github.com/hecrj/iced/blob/master/graphics/src/widget/canvas/cache.rs
         cache: Cache,
@@ -328,7 +343,7 @@ pub mod interactive {
         output_type: PhantomData<T>, // Used to group together different layers that have the same output and thus the same interactive behavior. Interactive layers based on layers that input an RGBA image or convert something to an RGBA image shouldn't need different impls, as their interactive behavior should be the same in both cases
     }
 
-    impl<A: Layer, T> InterLayer<A, T> {
+    impl<A: Layer, T> InteractionLayer<A, T> {
         pub fn new(layer: A) -> Self {
             Self {
                 layer,
@@ -348,7 +363,7 @@ pub mod interactive {
         }
     }
 
-    impl<A: Layer, T> Layer for InterLayer<A, T> {
+    impl<A: Layer, T> Layer for InteractionLayer<A, T> {
         fn compute(
             &self,
             input: &[Option<&dyn Any>],
@@ -370,12 +385,12 @@ pub mod interactive {
     }
 
     impl<A: Layer, T, Message, RenderBackend: Backend> InteractiveLayer<Message, RenderBackend>
-        for InterLayer<A, T>
+        for InteractionLayer<A, T>
     {
     }
 
     impl<A: Layer, T, Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
-        for InterLayer<A, T>
+        for InteractionLayer<A, T>
     {
         default fn width(&self) -> iced::Length {
             iced::Length::Shrink
@@ -414,7 +429,7 @@ pub mod interactive {
 
     // https://github.com/hecrj/iced/blob/master/native/src/widget/image.rs
     impl<A: Layer, Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
-        for InterLayer<A, element::RgbaImage>
+        for InteractionLayer<A, element::RgbaImage>
     {
         fn draw(
             &self,
