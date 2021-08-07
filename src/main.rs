@@ -1,16 +1,21 @@
 use anyhow::{Context, Result};
 use iced::{Application, Settings};
-use image::{self, GrayImage, RgbaImage};
+use image::{self, GrayImage};
 use petgraph::graph::NodeIndex;
 
-use klex::layer_graph::InteractiveLayerGraph;
 use klex::{
-    element::BinImage,
-    layer::primitive::{Convert, InputFile, Threshold},
+    element::{BinaryImage, RgbaImage},
+    layer::{
+        interactive,
+        primitive::{Convert, InputFile, Threshold},
+    },
+    layer_graph::InteractiveLayerGraph,
 };
 
 fn main() -> Result<()> {
-    // let mut layer_graph = InteractiveLayerGraph::new();
+    let mut layer_graph = InteractiveLayerGraph::new();
+    let layer = Box::new(InputFile::<RgbaImage>::new_interactive("Tulips.jpg".into()));
+    layer_graph.add_layer(layer, vec![]);
     // let layer = Box::new(InputFile::<RgbaImage>::new("Tulips.jpg".into()));
     // layer_graph.add_layer(layer, vec![]);
     // let layer = Box::new(Convert::<RgbaImage, GrayImage>::new());

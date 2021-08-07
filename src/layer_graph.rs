@@ -1,15 +1,14 @@
 use std::any::Any;
 
 use anyhow::Result;
-use iced_native;
 use iced_wgpu;
 use petgraph::{graph::NodeIndex, Direction, Graph};
 
-use crate::layer::{InteractiveLayer, Layer};
+use crate::layer::InteractiveLayer;
 use crate::ui;
 
 pub struct InteractiveLayerGraph {
-    pub layers: Graph<Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Renderer>>, ()>,
+    pub layers: Graph<Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Backend>>, ()>,
     selected_layer: NodeIndex,
 }
 
@@ -23,7 +22,7 @@ impl InteractiveLayerGraph {
 
     pub fn add_layer_with_children(
         &mut self,
-        layer: Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Renderer>>,
+        layer: Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Backend>>,
         parent_nodes: Vec<NodeIndex>,
         child_nodes: Vec<NodeIndex>,
     ) {
@@ -40,7 +39,7 @@ impl InteractiveLayerGraph {
 
     pub fn add_layer(
         &mut self,
-        layer: Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Renderer>>,
+        layer: Box<dyn InteractiveLayer<ui::InternalMessage, iced_wgpu::Backend>>,
         parent_nodes: Vec<NodeIndex>,
     ) {
         self.add_layer_with_children(layer, parent_nodes, vec![])

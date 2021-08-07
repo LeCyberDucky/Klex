@@ -25,22 +25,19 @@ pub trait InteractiveLayer<Message, RenderBackend: Backend>:
 }
 
 pub mod primitive {
+    use super::interactive::InterLayer;
     use super::*;
 
-    use std::hash::Hash;
+    use ndarray::array;
 
-    use iced::Length;
-    use iced_native::{layout::Node, Size};
-    use image::{GrayImage, RgbaImage};
-
-    use crate::element::{self, BinImage};
+    use crate::element::{BinaryImage, GrayAlphaImage, GrayImage, RgbaImage};
 
     pub struct Convert<A, B> {
         operation: fn(&A) -> Result<B>,
         output: Option<B>,
     }
 
-    impl Convert<RgbaImage, GrayImage> {
+    impl Convert<RgbaImage, GrayAlphaImage> {
         pub fn new() -> Self {
             Self {
                 operation: Self::compute,
@@ -48,18 +45,39 @@ pub mod primitive {
             }
         }
 
-        pub fn compute(input: &RgbaImage) -> Result<GrayImage> {
-            Ok(image::imageops::colorops::grayscale(input))
+        pub fn compute(input: &RgbaImage) -> Result<GrayAlphaImage> {
+            // Colourimetric conversion to grayscale - Linear luminance
+            // https://en.wikipedia.org/wiki/Grayscale#Converting_colour_to_greyscale
+
+            let data = input.data().map(|pixel| {
+                let normed_colors = pixel.data().map(|&c| c as f64 / 255.0);
+                let linear_colors = normed_colors.map(|&c| {
+                    if c <= 0.04045 {
+                        c / 12.92
+                    } else {
+                        ((c + 0.55) / 1.055).powf(2.4)
+                    }
+                });
+
+                let linear_luminance = 0.2126 * linear_colors[0]
+                    + 0.7152 * linear_colors[1]
+                    + 0.0722 * linear_colors[2];
+                let linear_luminance = (255.0 * linear_luminance).round() as u8;
+
+                array![linear_luminance, pixel.data()[3]]
+            });
+
+            Ok(GrayAlphaImage::new(data, input.width(), input.height()))
         }
     }
 
-    impl Default for Convert<RgbaImage, GrayImage> {
+    impl Default for Convert<RgbaImage, GrayAlphaImage> {
         fn default() -> Self {
             Self::new()
         }
     }
 
-    impl Convert<BinImage, GrayImage> {
+    impl Convert<BinaryImage, GrayImage> {
         pub fn new() -> Self {
             Self {
                 operation: Self::compute,
@@ -67,18 +85,15 @@ pub mod primitive {
             }
         }
 
-        pub fn compute(input: &BinImage) -> Result<GrayImage> {
+        pub fn compute(input: &BinaryImage) -> Result<GrayImage> {
             let data = input
                 .data()
-                .iter()
-                .map(|&pixel| if pixel { u8::MAX } else { u8::MIN })
-                .collect();
-            GrayImage::from_vec(input.width(), input.height(), data)
-                .context("Data cannot be converted to GrayImage")
+                .map(|&pixel| if pixel { u8::MAX } else { u8::MIN });
+            Ok(GrayImage::new(data, input.width(), input.height()))
         }
     }
 
-    impl Default for Convert<BinImage, GrayImage> {
+    impl Default for Convert<BinaryImage, GrayImage> {
         fn default() -> Self {
             Self::new()
         }
@@ -154,17 +169,24 @@ pub mod primitive {
             }
         }
 
+        pub fn new_interactive(file_path: std::path::PathBuf) -> InterLayer<Self, RgbaImage> {
+            InterLayer::new(Self::new(file_path))
+        }
+
         pub fn compute(&self) -> Result<RgbaImage> {
-            Ok(image::open(&self.file_path)?.into_rgba8())
+            // Ok(image::open(&self.file_path)?.into_rgba8())
+            RgbaImage::open(&self.file_path)
         }
 
-        fn width(&self) -> Option<usize> {
-            Some(self.output.as_ref()?.dimensions().0 as usize)
-        }
+        // fn width(&self) -> Option<usize> {
+        //     // Some(self.output.as_ref()?.dimensions().0 as usize)
+        //     Some(self.output.as_ref()?.width())
+        // }
 
-        fn height(&self) -> Option<usize> {
-            Some(self.output.as_ref()?.dimensions().1 as usize)
-        }
+        // fn height(&self) -> Option<usize> {
+        //     // Some(self.output.as_ref()?.dimensions().1 as usize)
+        //     Some(self.output.as_ref()?.height())
+        // }
     }
 
     impl<A: 'static> Layer for InputFile<A> {
@@ -217,7 +239,7 @@ pub mod primitive {
         output: Option<B>,
     }
 
-    impl Threshold<GrayImage, element::BinImage, u8> {
+    impl Threshold<GrayImage, BinaryImage, u8> {
         pub fn new(threshold: u8, ordering: std::cmp::Ordering) -> Self {
             Self {
                 threshold,
@@ -227,12 +249,11 @@ pub mod primitive {
             }
         }
 
-        pub fn compute(&self, input: &GrayImage) -> element::BinImage {
+        pub fn compute(&self, input: &GrayImage) -> BinaryImage {
             let data = input
-                .pixels()
-                .map(|pixel| pixel.0[0].cmp(&self.threshold) == self.ordering)
-                .collect();
-            element::BinImage::new(input.width(), input.height(), data)
+                .data()
+                .map(|pixel| pixel.cmp(&self.threshold) == self.ordering);
+            BinaryImage::new(data, input.width(), input.height())
         }
     }
 
@@ -286,31 +307,35 @@ pub mod primitive {
     }
 }
 
-mod interactive {
+pub mod interactive {
     use std::hash::Hash;
+    use std::marker::PhantomData;
 
-    use image::RgbImage;
+    use iced_graphics::Primitive;
 
-    use super::primitive::InputFile;
+    use crate::element;
+
     use super::*;
 
     struct Cache {}
 
-    struct InterLayer<A: Layer> {
+    pub struct InterLayer<A: Layer, T> {
         layer: A,
         // cache: Option<Geometry> // https://docs.rs/iced/0.3.0/iced/widget/canvas/struct.Cache.html https://github.com/hecrj/iced/blob/master/graphics/src/widget/canvas/cache.rs
         cache: Cache,
         width: Option<usize>,
         height: Option<usize>,
+        output_type: PhantomData<T>, // Used to group together different layers that have the same output and thus the same interactive behavior. Interactive layers based on layers that input an RGBA image or convert something to an RGBA image shouldn't need different impls, as their interactive behavior should be the same in both cases
     }
 
-    impl<A: Layer> InterLayer<A> {
+    impl<A: Layer, T> InterLayer<A, T> {
         pub fn new(layer: A) -> Self {
             Self {
                 layer,
                 cache: Cache {},
                 width: None,
                 height: None,
+                output_type: PhantomData,
             }
         }
 
@@ -323,7 +348,7 @@ mod interactive {
         }
     }
 
-    impl<A: Layer> Layer for InterLayer<A> {
+    impl<A: Layer, T> Layer for InterLayer<A, T> {
         fn compute(
             &self,
             input: &[Option<&dyn Any>],
@@ -344,13 +369,13 @@ mod interactive {
         }
     }
 
-    impl<A: Layer, Message, RenderBackend: Backend> InteractiveLayer<Message, RenderBackend>
-        for InterLayer<A>
+    impl<A: Layer, T, Message, RenderBackend: Backend> InteractiveLayer<Message, RenderBackend>
+        for InterLayer<A, T>
     {
     }
 
-    impl<A: Layer, Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
-        for InterLayer<A>
+    impl<A: Layer, T, Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
+        for InterLayer<A, T>
     {
         default fn width(&self) -> iced::Length {
             iced::Length::Shrink
@@ -362,8 +387,8 @@ mod interactive {
 
         default fn layout(
             &self,
-            renderer: &Renderer<RenderBackend>,
-            limits: &iced_native::layout::Limits,
+            _renderer: &Renderer<RenderBackend>,
+            _limits: &iced_native::layout::Limits,
         ) -> iced_native::layout::Node {
             iced_native::layout::Node::new(iced_native::Size::new(
                 self.width().unwrap_or(0) as f32,
@@ -373,37 +398,52 @@ mod interactive {
 
         default fn draw(
             &self,
-            renderer: &mut Renderer<RenderBackend>,
-            defaults: &<Renderer<RenderBackend> as iced_native::Renderer>::Defaults,
-            layout: iced_native::Layout<'_>,
-            cursor_position: iced::Point,
-            viewport: &iced::Rectangle,
+            _renderer: &mut Renderer<RenderBackend>,
+            _defaults: &<Renderer<RenderBackend> as iced_native::Renderer>::Defaults,
+            _layout: iced_native::Layout<'_>,
+            _cursor_position: iced::Point,
+            _viewport: &iced::Rectangle,
         ) -> <Renderer<RenderBackend> as iced_native::Renderer>::Output {
             todo!()
         }
 
-        default fn hash_layout(&self, state: &mut iced_native::Hasher) {
+        default fn hash_layout(&self, _state: &mut iced_native::Hasher) {
             todo!()
         }
     }
 
     // https://github.com/hecrj/iced/blob/master/native/src/widget/image.rs
-    impl<Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
-        for InterLayer<InputFile<RgbImage>>
+    impl<A: Layer, Message, RenderBackend: Backend> Widget<Message, Renderer<RenderBackend>>
+        for InterLayer<A, element::RgbaImage>
     {
         fn draw(
             &self,
-            renderer: &mut Renderer<RenderBackend>,
-            defaults: &<Renderer<RenderBackend> as iced_native::Renderer>::Defaults,
-            layout: iced_native::Layout<'_>,
-            cursor_position: iced::Point,
-            viewport: &iced::Rectangle,
+            _renderer: &mut Renderer<RenderBackend>,
+            _defaults: &<Renderer<RenderBackend> as iced_native::Renderer>::Defaults,
+            _layout: iced_native::Layout<'_>,
+            _cursor_position: iced::Point,
+            _viewport: &iced::Rectangle,
         ) -> <Renderer<RenderBackend> as iced_native::Renderer>::Output {
-            // todo!()
-            (
-                iced_graphics::Primitive::None,
-                iced_native::mouse::Interaction::Idle,
-            )
+            let mut output = (Primitive::None, iced_native::mouse::Interaction::Idle);
+
+            if let Some(input) = self.output() {
+                let input = input.downcast_ref::<element::RgbaImage>();
+                if let Some(content) = input {
+                    let image_handle = content.handle();
+                    output.0 = Primitive::Image {
+                        handle: image_handle,
+                        bounds: iced_graphics::Rectangle::new(
+                            iced_graphics::Point::new(0.0, 0.0),
+                            iced_graphics::Size::new(
+                                content.width() as f32,
+                                content.height() as f32,
+                            ),
+                        ),
+                    };
+                }
+            }
+
+            output
         }
 
         fn hash_layout(&self, state: &mut iced_native::Hasher) {
